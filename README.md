@@ -1,3 +1,4 @@
 Comparate 2 excel files and generate a new spreadsheet with the approrpiate manipulations.
 
-![image](https://github.com/user-attachments/assets/4f322621-2ee6-48d9-ade4-4cf8e0beaa27)
+![image](https://github.com/user-attachments/assets/0c1f7cf0-867a-4ec1-87c9-b78c0a2feded)
+
