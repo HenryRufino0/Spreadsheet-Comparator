@@ -394,7 +394,7 @@ class ComparadorPlanilhas:
             highlightthickness=3,           # Espessura da borda
             bd=0
         )
-        self.container.place(relx=0.5, rely=0.5, anchor="center", width=450, height=550)
+        self.container.place(relx=0.5, rely=0.5, anchor="center", width=550, height=650)
 
         # Agora um Frame INTERNO para os botões dentro do container
         self.inner_frame = tk.Frame(self.container, bg="#4e6ca8")
@@ -486,6 +486,22 @@ class ComparadorPlanilhas:
             width=30
         )
         self.label_comparacao.pack(pady=(0, 15))
+
+        # Aviso de problemas (em laranja)
+        self.label_aviso_laranja = tk.Label(
+            self.inner_frame,
+            text="",
+            bg="#4e6ca8",
+            fg="#FFA500",  # laranja
+            font=("Arial", 10, "bold"),
+            wraplength=300,
+            justify="left"
+        )
+        self.label_aviso_laranja.pack(pady=(0, 10))
+
+
+
+        
 
        
 
@@ -675,25 +691,76 @@ class ComparadorPlanilhas:
             arquivos = [os.path.join(diretorio_comparacao, arq) 
                         for arq in os.listdir(diretorio_comparacao) 
                         if arq.lower().endswith(('.xls', '.xlsx', '.xlsb'))]
+
             if not arquivos:
-                raise FileNotFoundError("Nenhuma planilha encontrada!\n"
-                "Coloque as planilhas na\n"
-                "pasta Extras Planilhas")
-                
-    
+                raise FileNotFoundError("Nenhuma planilha encontrada!")
+
             self.caminhos_comparacao = arquivos
             self.label_comparacao.config(
                 text=f"{len(arquivos)} Planilhas carregadas!",
-                fg="white",
-                font=("Arial", 10, "bold")
+                fg="white"
             )
 
-            # Indicação visual de sucesso
-            self.botao_comparacao.config(bg="#4CAF50")  # Verde
-            self.root.after(5000, lambda: self.reset_cor_botao(self.botao_comparacao))  
+            planilhas_com_nao = []
+
+            for caminho in arquivos:
+                try:
+                    # Lê a planilha original sem filtrar por SIM ou X
+                    df_original = pd.read_excel(
+                        caminho,
+                        engine='pyxlsb' if caminho.lower().endswith('.xlsb') else None,
+                        header=None
+                    )
+
+                    # Detecta cabeçalho
+                    colunas_desejadas = [
+                        "Reg.", "Nome empregado", "Unidade de Negócio", "Turno",
+                        "Optante de transporte", "Usará transporte na HE", "LANCHE",
+                        "HORARIO DE SAÍDA", "OBSERVAÇÃO"
+                    ]
+                    header_unificado, idx_cabecalho = encontrar_cabecalho_personalizado(df_original, colunas_desejadas)
+                    df_original.columns = header_unificado
+                    df_original = df_original.iloc[idx_cabecalho + 1:]
+
+                    # Renomeia as colunas que nos interessam
+                    for c in df_original.columns:
+                        if "optante de transporte" in c.lower():
+                            df_original.rename(columns={c: "Optante de transporte"}, inplace=True)
+                        if "usará transporte na he" in c.lower():
+                            df_original.rename(columns={c: "Usará transporte na HE"}, inplace=True)
+
+                    if "Optante de transporte" in df_original.columns and "Usará transporte na HE" in df_original.columns:
+                        df_original["Optante de transporte"] = df_original["Optante de transporte"].astype(str).str.upper().str.strip()
+                        df_original["Usará transporte na HE"] = df_original["Usará transporte na HE"].astype(str).str.upper().str.strip()
+
+                        cond = (
+                            (df_original["Optante de transporte"] == "NÃO") &
+                            (df_original["Usará transporte na HE"] == "NÃO")
+                        )
+                        if cond.any():
+                            planilhas_com_nao.append(os.path.basename(caminho))
+
+                except Exception as e:
+                    print(f"Erro ao processar planilha {caminho}: {e}")
+                    continue
+
+            if planilhas_com_nao:
+                lista_horizontal = ", ".join(planilhas_com_nao)
+                texto = f"⚠️ As seguintes planilhas têm 'NÃO' nas duas colunas:\n{lista_horizontal}"
+
+                self.label_aviso_laranja.config(text=texto, fg="#FFA500")
+            else:
+                self.label_aviso_laranja.config(text="")
+
+            self.botao_comparacao.config(bg="#4CAF50")
+            self.root.after(5000, lambda: self.reset_cor_botao(self.botao_comparacao))
+
         except Exception as e:
             self.label_comparacao.config(text=f"Erro: {e}", fg="#ff5a5a")
-            self.botao_comparacao.config(bg="#fc6a6a")  # Vermelho
+            self.botao_comparacao.config(bg="#fc6a6a")
+            self.label_aviso_laranja.config(text="")
+
+
 
 
 
